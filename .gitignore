@@ -47,6 +47,7 @@ htmlcov/
 *.pt
 *.pth
 *.keras
+*.joblib
 *.onnx
 *.h5
 *.ckpt
@@ -101,6 +102,7 @@ Desktop.ini
 docker-compose.override.yml
 .docker/
 *.db
+*.zip
 *.sqlite
 *.sqlite3
 .ipynb_checkpoints/

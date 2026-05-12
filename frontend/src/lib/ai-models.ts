@@ -1,4 +1,4 @@
-import { Activity, Image, Mic, FileText, ShieldAlert, Type, Video, ScanFace } from "lucide-react";
+import { Activity, HeartPulse, Image, Mic, FileText, ShieldAlert, Type, Video, ScanFace } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type AIModel = {
@@ -67,6 +67,15 @@ export const aiModels: AIModel[] = [
     accept: "",
   },
   {
+    slug: "biometric_heartbeat_detection",
+    name: "Analyse cardiaque biometrique",
+    description: "Analyse des signaux HRV pour estimer stress et danger physiologique.",
+    icon: HeartPulse,
+    accent: "bg-accent text-accent-foreground",
+    input: "structured",
+    accept: "",
+  },
+  {
     slug: "audio_violence_detection",
     name: "Analyse audio de violence",
     description: "Analyse un fichier audio pour détecter des signes de violence.",
@@ -88,6 +97,15 @@ export const aiModels: AIModel[] = [
     slug: "threat_detection",
     name: "Détection de menace (vidéo)",
     description: "Analyse une vidéo pour repérer des situations menaçantes.",
+    icon: Video,
+    accent: "bg-secondary text-secondary-foreground",
+    input: "video",
+    accept: "video/*",
+  },
+  {
+    slug: "video_violence_detection",
+    name: "Detection de violence video",
+    description: "Analyse une video avec VideoSwin pour detecter fight/noFight.",
     icon: Video,
     accent: "bg-secondary text-secondary-foreground",
     input: "video",

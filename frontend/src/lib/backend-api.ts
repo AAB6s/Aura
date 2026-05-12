@@ -102,6 +102,29 @@ export type PropagationResult = {
   metrics: Record<string, number>;
 };
 
+export type HeartbeatResult = {
+  model: "biometric_heartbeat_detection";
+  label: string;
+  class_index: number;
+  confidence: number;
+  stress_score: number;
+  scores: Record<string, number>;
+  random_forest_scores: Record<string, number>;
+  sequence: {
+    label: string;
+    class_index: number;
+    confidence: number;
+    scores: Record<string, number>;
+    input_length: number;
+  };
+  input: {
+    base_feature_count: number;
+    auxiliary_feature_count: number;
+    sequence_length: number;
+    feature_columns: string[];
+  };
+};
+
 export type AudioResult = {
   file: string;
   file_hash: string;
@@ -287,6 +310,27 @@ export type ThreatResult = {
   };
 };
 
+export type VideoViolenceResult = {
+  file: string;
+  model: "video_violence_detection";
+  label: "noFight" | "fight" | string;
+  violence_detected: boolean;
+  confidence: number;
+  threshold: number;
+  scores: Record<string, number>;
+  video: {
+    media_type: "video" | "image";
+    frame_count: number;
+    fps: number | null;
+    duration_seconds: number | null;
+    sampled_frames: number;
+  };
+  input: {
+    num_frames: number;
+    input_size: [224, 224];
+  };
+};
+
 export type ModelAnalysisResult =
   | SexismResult
   | WeaponResult
@@ -294,9 +338,11 @@ export type ModelAnalysisResult =
   | ImageAuthenticityResult
   | TextAuthenticityResult
   | PropagationResult
+  | HeartbeatResult
   | AudioResult
   | DocumentAnalyzeResult
-  | ThreatResult;
+  | ThreatResult
+  | VideoViolenceResult;
 
 export async function runBackendAnalysis(
   model: AIModel,
@@ -305,6 +351,8 @@ export async function runBackendAnalysis(
   audioOptions?: AudioAnalysisOptions,
   text?: string,
   propagationFeatures?: Record<string, number>,
+  heartbeatFeatures?: Record<string, number>,
+  heartbeatSignal?: number[],
 ) {
   let endpoint = "";
 
@@ -313,6 +361,23 @@ export async function runBackendAnalysis(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ features: propagationFeatures ?? {} }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === "object" && "detail" in payload
+          ? String(payload.detail)
+          : "Request failed";
+      throw new Error(detail);
+    }
+    return payload as ModelAnalysisResult;
+  }
+
+  if (model.slug === "biometric_heartbeat_detection") {
+    const response = await fetch(`${API_BASE_URL}/heartbeat/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ features: heartbeatFeatures ?? {}, signal: heartbeatSignal ?? [] }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
@@ -372,6 +437,10 @@ export async function runBackendAnalysis(
     if (!file) throw new Error("File is required.");
     form.append("file", file);
     endpoint = "/threat/detect";
+  } else if (model.slug === "video_violence_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
+    endpoint = "/video-violence/detect";
   } else {
     throw new Error(`Unsupported model: ${model.slug}`);
   }

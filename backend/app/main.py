@@ -5,12 +5,14 @@ from .routers import (
     audio,
     document,
     face,
+    heartbeat,
     image_authenticity,
     models,
     propagation,
     sexism,
     text_authenticity,
     threat,
+    video_violence,
     weapon,
 )
 
@@ -40,3 +42,5 @@ app.include_router(image_authenticity.router)
 app.include_router(face.router)
 app.include_router(text_authenticity.router)
 app.include_router(propagation.router)
+app.include_router(heartbeat.router)
+app.include_router(video_violence.router)

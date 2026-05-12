@@ -19,6 +19,7 @@ import {
   runBackendAnalysis,
   type AudioAnalysisOptions,
   type FaceResult,
+  type HeartbeatResult,
   type ModelAnalysisResult,
   type PropagationResult,
   type WeaponResult,
@@ -94,6 +95,31 @@ const propagationDefaultFeatures = Object.fromEntries(
   Object.keys(propagationFeatureLabels).map((key) => [key, 0]),
 ) as Record<string, number>;
 
+const heartbeatBaseFeatureLabels = Object.fromEntries(
+  Array.from({ length: 35 }, (_, index) => {
+    const key = `hrv_${String(index + 1).padStart(2, "0")}`;
+    return [key, `HRV ${index + 1}`];
+  }),
+) as Record<string, string>;
+
+const heartbeatAuxFeatureLabels = Object.fromEntries(
+  Array.from({ length: 12 }, (_, index) => {
+    const key = `aux_${String(index + 1).padStart(2, "0")}`;
+    return [key, `Aux ${index + 1}`];
+  }),
+) as Record<string, string>;
+
+const heartbeatFeatureLabels = {
+  ...heartbeatBaseFeatureLabels,
+  ...heartbeatAuxFeatureLabels,
+};
+
+const heartbeatDefaultFeatures = Object.fromEntries(
+  Object.keys(heartbeatFeatureLabels).map((key) => [key, 0]),
+) as Record<string, number>;
+
+const heartbeatDefaultSignal = Array.from({ length: 16 }, () => 0);
+
 function DashboardPage() {
   const { model } = Route.useSearch();
   const [selected] = useState(model ?? aiModels[0].slug);
@@ -108,6 +134,10 @@ function DashboardPage() {
   const [propagationFeatures, setPropagationFeatures] = useState<Record<string, number>>(
     propagationDefaultFeatures,
   );
+  const [heartbeatFeatures, setHeartbeatFeatures] = useState<Record<string, number>>(
+    heartbeatDefaultFeatures,
+  );
+  const [heartbeatSignal, setHeartbeatSignal] = useState<number[]>(heartbeatDefaultSignal);
   const [history, setHistory] = useState<Analysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [latest, setLatest] = useState<Analysis | null>(null);
@@ -152,6 +182,8 @@ function DashboardPage() {
         audioOptions,
         textInput,
         propagationFeatures,
+        heartbeatFeatures,
+        heartbeatSignal,
       );
       const summary = summarizeResult(result);
       const analysis: Analysis = {
@@ -164,7 +196,9 @@ function DashboardPage() {
           (current.input === "text"
             ? "Texte"
             : current.input === "structured"
-              ? "Signaux de propagation"
+              ? current.slug === "biometric_heartbeat_detection"
+                ? "Signaux cardiaques"
+                : "Signaux de propagation"
               : ""),
         score: summary.score,
         label: summary.label,
@@ -192,7 +226,9 @@ function DashboardPage() {
           : current.input === "text"
             ? "Coller un texte"
             : current.input === "structured"
-              ? "Renseigner les signaux"
+              ? current.slug === "biometric_heartbeat_detection"
+                ? "Renseigner les donnees cardiaques"
+                : "Renseigner les signaux"
               : "Importer un document";
 
   const inputDescription =
@@ -205,7 +241,9 @@ function DashboardPage() {
           : current.input === "text"
             ? "Texte brut analyse directement par le modele."
             : current.input === "structured"
-              ? "Valeurs numeriques envoyees au modele de propagation."
+              ? current.slug === "biometric_heartbeat_detection"
+                ? "Valeurs numeriques HRV, auxiliaires et signal compact."
+                : "Valeurs numeriques envoyees au modele de propagation."
               : "Formats acceptes: PDF, images, documents.";
 
   const InputIcon =
@@ -303,7 +341,7 @@ function DashboardPage() {
                     className="mt-3 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-base focus-visible:ring-2 focus-visible:ring-ring motion-focus"
                   />
                 )}
-                {current.input === "structured" && (
+                {current.input === "structured" && current.slug === "propagation_prediction" && (
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {Object.keys(propagationFeatureLabels).map((key) => (
                       <label key={key} className="block">
@@ -329,6 +367,66 @@ function DashboardPage() {
                     ))}
                   </div>
                 )}
+                {current.input === "structured" &&
+                  current.slug === "biometric_heartbeat_detection" && (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <p className="text-sm font-semibold">HRV</p>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                          {Object.keys(heartbeatBaseFeatureLabels).map((key) => (
+                            <NumberField
+                              key={key}
+                              label={heartbeatBaseFeatureLabels[key]}
+                              value={heartbeatFeatures[key] ?? 0}
+                              onChange={(value) => {
+                                setHeartbeatFeatures((features) => ({ ...features, [key]: value }));
+                                setLatest(null);
+                                setError(null);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Auxiliaires</p>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                          {Object.keys(heartbeatAuxFeatureLabels).map((key) => (
+                            <NumberField
+                              key={key}
+                              label={heartbeatAuxFeatureLabels[key]}
+                              value={heartbeatFeatures[key] ?? 0}
+                              onChange={(value) => {
+                                setHeartbeatFeatures((features) => ({ ...features, [key]: value }));
+                                setLatest(null);
+                                setError(null);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">Signal</p>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-4">
+                          {heartbeatSignal.map((value, index) => (
+                            <NumberField
+                              key={`signal-${index}`}
+                              label={`S${index + 1}`}
+                              value={value}
+                              onChange={(nextValue) => {
+                                setHeartbeatSignal((items) =>
+                                  items.map((item, itemIndex) =>
+                                    itemIndex === index ? nextValue : item,
+                                  ),
+                                );
+                                setLatest(null);
+                                setError(null);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 {current.input === "document" && (
                   <div className="mt-3">
                     <label
@@ -450,6 +548,7 @@ function DashboardPage() {
                 {isPropagationResult(latest.raw) && (
                   <PropagationCurvePreview result={latest.raw} />
                 )}
+                {isHeartbeatResult(latest.raw) && <HeartbeatBreakdownPreview result={latest.raw} />}
                 {latest.details.length > 0 && (
                   <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm font-semibold">Details</p>
@@ -505,6 +604,32 @@ function DashboardPage() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function NumberField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <input
+        type="number"
+        step="0.01"
+        value={value}
+        onChange={(event) => {
+          const nextValue = Number(event.target.value);
+          onChange(Number.isFinite(nextValue) ? nextValue : 0);
+        }}
+        className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-base focus-visible:ring-2 focus-visible:ring-ring motion-focus"
+      />
+    </label>
   );
 }
 
@@ -636,6 +761,45 @@ function PropagationCurvePreview({ result }: { result: PropagationResult }) {
   );
 }
 
+function HeartbeatBreakdownPreview({ result }: { result: HeartbeatResult }) {
+  const rows = [
+    { name: "Classifieur calibre", scores: result.scores },
+    { name: "Random forest", scores: result.random_forest_scores },
+    { name: "Sequence", scores: result.sequence.scores },
+  ];
+
+  return (
+    <div className="rounded-2xl bg-muted/40 p-4 motion-in">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Modeles cardiaques</p>
+        <span className="text-sm text-muted-foreground">
+          {result.input.base_feature_count + result.input.auxiliary_feature_count} features
+        </span>
+      </div>
+      <div className="mt-3 grid gap-3">
+        {rows.map((row) => (
+          <div key={row.name} className="rounded-xl border border-border bg-background p-3">
+            <p className="text-sm font-medium">{row.name}</p>
+            <div className="mt-2 space-y-2">
+              {Object.entries(row.scores).map(([label, value]) => (
+                <div key={`${row.name}-${label}`}>
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span className="truncate">{label}</span>
+                    <span>{toPercent(value)}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border">
+                    <div className="h-full bg-aura-gradient" style={{ width: `${toPercent(value)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function summarizeResult(result: ModelAnalysisResult) {
   if ("sexism_detected" in result) {
     return {
@@ -685,6 +849,32 @@ function summarizeResult(result: ModelAnalysisResult) {
           .join(" | ")}`,
         `Transformer: ${result.transformer.status}`,
         `Features: ${result.input.feature_columns.length}`,
+      ],
+    };
+  }
+
+  if ("model" in result && result.model === "biometric_heartbeat_detection") {
+    return {
+      label: result.label,
+      score: toPercent(result.confidence),
+      details: [
+        `Score stress: ${result.stress_score.toFixed(2)}`,
+        `Sequence: ${result.sequence.label} (${toPercent(result.sequence.confidence)}%)`,
+        `Features: ${result.input.base_feature_count} HRV + ${result.input.auxiliary_feature_count} auxiliaires`,
+        `Signal: ${result.sequence.input_length} points`,
+      ],
+    };
+  }
+
+  if ("model" in result && result.model === "video_violence_detection") {
+    return {
+      label: result.violence_detected ? "Violence detectee" : "Aucune violence detectee",
+      score: toPercent(result.confidence),
+      details: [
+        `Score fight: ${toPercent(result.scores.fight ?? 0)}%`,
+        `Score noFight: ${toPercent(result.scores.noFight ?? 0)}%`,
+        `Images analysees: ${result.video.sampled_frames}`,
+        `Duree: ${result.video.duration_seconds ?? "n/a"}s`,
       ],
     };
   }
@@ -775,6 +965,10 @@ function isBoxDetectionResult(result: ModelAnalysisResult): result is WeaponResu
 
 function isPropagationResult(result: ModelAnalysisResult): result is PropagationResult {
   return "model" in result && result.model === "propagation_prediction";
+}
+
+function isHeartbeatResult(result: ModelAnalysisResult): result is HeartbeatResult {
+  return "model" in result && result.model === "biometric_heartbeat_detection";
 }
 
 function requiresFile(input: Analysis["type"]) {

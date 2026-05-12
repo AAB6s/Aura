@@ -13,6 +13,8 @@ MODEL_FOLDERS = {
     "face_detection": BACKEND_DIR / "face_detection" / "models",
     "text_authenticity_detection": BACKEND_DIR / "text_authenticity_detection" / "models",
     "propagation_prediction": BACKEND_DIR / "propagation_prediction" / "models",
+    "biometric_heartbeat_detection": BACKEND_DIR / "biometric_heartbeat_detection" / "models",
+    "video_violence_detection": BACKEND_DIR / "video_violence_detection" / "models",
 }
 
 
@@ -26,7 +28,7 @@ def _weights(folder: Path):
             "size_bytes": item.stat().st_size,
         }
         for item in sorted(folder.iterdir())
-        if item.suffix.lower() in {".pt", ".pth", ".keras"}
+        if item.suffix.lower() in {".pt", ".pth", ".keras", ".joblib"}
     ]
 
 
