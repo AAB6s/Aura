@@ -41,6 +41,67 @@ export type WeaponResult = {
   }[];
 };
 
+export type FaceResult = {
+  file: string;
+  model: "face_detection";
+  detections: {
+    label: string;
+    confidence: number;
+    box_xyxy: [number, number, number, number];
+  }[];
+  original_size: [number, number];
+};
+
+export type ImageAuthenticityResult = {
+  file: string;
+  model: "image_authenticity_detection";
+  label: "REAL" | "AI_GENERATED_OR_FAKE";
+  ai_generated: boolean;
+  confidence: number;
+  threshold: number;
+  scores: {
+    REAL: number;
+    AI_GENERATED_OR_FAKE: number;
+  };
+  original_size: [number, number];
+  input_size: [224, 224];
+};
+
+export type TextAuthenticityResult = {
+  model: "text_authenticity_detection";
+  label: "HUMAN" | "AI_GENERATED";
+  ai_generated: boolean;
+  confidence: number;
+  threshold: number;
+  scores: {
+    HUMAN: number;
+    AI_GENERATED: number;
+  };
+  input: {
+    characters: number;
+    max_length: number;
+  };
+};
+
+export type PropagationResult = {
+  model: "propagation_prediction";
+  virality_score: number;
+  virality_class: string;
+  virality_class_confidence: number;
+  class_scores: Record<string, number>;
+  transformer: {
+    status: "ready" | "unavailable";
+    error: string | null;
+    propagation_curve: number[];
+  };
+  input: {
+    features: Record<string, number>;
+    feature_columns: string[];
+    sequence_length: number;
+  };
+  metrics: Record<string, number>;
+};
+
 export type AudioResult = {
   file: string;
   file_hash: string;
@@ -229,25 +290,65 @@ export type ThreatResult = {
 export type ModelAnalysisResult =
   | SexismResult
   | WeaponResult
+  | FaceResult
+  | ImageAuthenticityResult
+  | TextAuthenticityResult
+  | PropagationResult
   | AudioResult
   | DocumentAnalyzeResult
   | ThreatResult;
 
 export async function runBackendAnalysis(
   model: AIModel,
-  file: File,
+  file: File | null,
   question: string,
   audioOptions?: AudioAnalysisOptions,
+  text?: string,
+  propagationFeatures?: Record<string, number>,
 ) {
-  const form = new FormData();
-  form.append("file", file);
   let endpoint = "";
 
+  if (model.slug === "propagation_prediction") {
+    const response = await fetch(`${API_BASE_URL}/propagation/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ features: propagationFeatures ?? {} }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === "object" && "detail" in payload
+          ? String(payload.detail)
+          : "Request failed";
+      throw new Error(detail);
+    }
+    return payload as ModelAnalysisResult;
+  }
+
+  const form = new FormData();
+
   if (model.slug === "sexism_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
     endpoint = "/sexism/detect";
   } else if (model.slug === "weapon_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
     endpoint = "/weapon/detect";
+  } else if (model.slug === "image_authenticity_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
+    endpoint = "/image-authenticity/detect";
+  } else if (model.slug === "face_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
+    endpoint = "/face/detect";
+  } else if (model.slug === "text_authenticity_detection") {
+    endpoint = "/text-authenticity/detect";
+    form.append("text", text ?? "");
   } else if (model.slug === "audio_violence_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
     endpoint = "/audio/analyze";
     if (audioOptions) {
       form.append("transcription", String(audioOptions.transcription));
@@ -263,9 +364,13 @@ export async function runBackendAnalysis(
       form.append("transcription", "false");
     }
   } else if (model.slug === "document_intelligence_rag") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
     endpoint = "/document/analyze";
     form.append("question", question);
   } else if (model.slug === "threat_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
     endpoint = "/threat/detect";
   } else {
     throw new Error(`Unsupported model: ${model.slug}`);

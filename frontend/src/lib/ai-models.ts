@@ -1,4 +1,4 @@
-import { Image, ShieldAlert, Mic, FileText, Video } from "lucide-react";
+import { Activity, Image, Mic, FileText, ShieldAlert, Type, Video, ScanFace } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type AIModel = {
@@ -7,7 +7,7 @@ export type AIModel = {
   description: string;
   icon: LucideIcon;
   accent: string; // tailwind class for icon bg
-  input: "image" | "audio" | "document" | "video";
+  input: "image" | "audio" | "document" | "video" | "text" | "structured";
   accept: string;
 };
 
@@ -29,6 +29,42 @@ export const aiModels: AIModel[] = [
     accent: "bg-secondary text-secondary-foreground",
     input: "image",
     accept: "image/*",
+  },
+  {
+    slug: "image_authenticity_detection",
+    name: "Authenticite image",
+    description: "Detecte si une image semble reelle ou generee par IA.",
+    icon: Image,
+    accent: "bg-primary/15 text-primary",
+    input: "image",
+    accept: "image/*",
+  },
+  {
+    slug: "face_detection",
+    name: "Detection de visages",
+    description: "Localise les visages et renvoie les boites de detection.",
+    icon: ScanFace,
+    accent: "bg-accent text-accent-foreground",
+    input: "image",
+    accept: "image/*",
+  },
+  {
+    slug: "text_authenticity_detection",
+    name: "Authenticite texte",
+    description: "Analyse un texte pour estimer s'il est humain ou genere par IA.",
+    icon: Type,
+    accent: "bg-secondary text-secondary-foreground",
+    input: "text",
+    accept: "",
+  },
+  {
+    slug: "propagation_prediction",
+    name: "Prediction de propagation",
+    description: "Estime le score, la classe et la courbe de propagation.",
+    icon: Activity,
+    accent: "bg-primary/15 text-primary",
+    input: "structured",
+    accept: "",
   },
   {
     slug: "audio_violence_detection",

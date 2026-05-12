@@ -77,7 +77,7 @@ function HomePage() {
 
             <dl className="mt-10 grid grid-cols-3 gap-4 max-w-md">
               {[
-                { k: "5", v: "outils" },
+                { k: String(aiModels.length), v: "outils" },
                 { k: "24/7", v: "soutien" },
                 { k: "100%", v: "anonyme" },
               ].map((s) => (
@@ -174,7 +174,7 @@ function HomePage() {
             <div>
               <p className="text-sm font-medium text-primary">Nos outils</p>
               <h2 id="tools-title" className="mt-2 text-3xl sm:text-4xl font-display text-balance">
-                5 outils spécialisés, une seule mission.
+                {aiModels.length} outils spécialisés, une seule mission.
               </h2>
             </div>
             <Link to="/models" className="text-sm font-semibold text-primary hover:underline">

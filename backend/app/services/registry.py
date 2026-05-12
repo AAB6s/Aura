@@ -9,6 +9,10 @@ MODEL_FOLDERS = {
     "sexism_detection": BACKEND_DIR / "sexism_detection" / "models",
     "threat_detection": BACKEND_DIR / "threat_detection" / "models",
     "weapon_detection": BACKEND_DIR / "weapon_detection" / "models",
+    "image_authenticity_detection": BACKEND_DIR / "image_authenticity_detection" / "models",
+    "face_detection": BACKEND_DIR / "face_detection" / "models",
+    "text_authenticity_detection": BACKEND_DIR / "text_authenticity_detection" / "models",
+    "propagation_prediction": BACKEND_DIR / "propagation_prediction" / "models",
 }
 
 
@@ -21,7 +25,8 @@ def _weights(folder: Path):
             "path": str(item),
             "size_bytes": item.stat().st_size,
         }
-        for item in sorted(folder.glob("*.pt"))
+        for item in sorted(folder.iterdir())
+        if item.suffix.lower() in {".pt", ".pth", ".keras"}
     ]
 
 

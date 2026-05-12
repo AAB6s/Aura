@@ -9,7 +9,7 @@ export const Route = createFileRoute("/models")({
       {
         name: "description",
         content:
-          "Découvrez les 5 outils d'AURA dédiés à la détection et à la prévention des violences faites aux femmes.",
+          `Découvrez les ${aiModels.length} outils d'AURA dédiés à la détection et à la prévention des violences faites aux femmes.`,
       },
     ],
   }),

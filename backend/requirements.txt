@@ -20,3 +20,6 @@ soundfile
 scipy
 transformers
 ultralytics
+xgboost
+dill
+tensorflow

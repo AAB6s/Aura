@@ -46,6 +46,7 @@ htmlcov/
 *.cache
 *.pt
 *.pth
+*.keras
 *.onnx
 *.h5
 *.ckpt
@@ -108,6 +109,7 @@ mlartifacts/
 .dvc/
 *.dvc
 model_registry/
+backend/document_intelligence_rag/storage/vector_indexes/
 celerybeat-schedule
 celerybeat.pid
 *.pid

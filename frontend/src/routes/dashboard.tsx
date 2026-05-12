@@ -11,12 +11,16 @@ import {
   ArrowLeft,
   Headphones,
   Video,
+  Type,
+  Activity,
 } from "lucide-react";
 import { z } from "zod";
 import {
   runBackendAnalysis,
   type AudioAnalysisOptions,
+  type FaceResult,
   type ModelAnalysisResult,
+  type PropagationResult,
   type WeaponResult,
 } from "@/lib/backend-api";
 
@@ -40,7 +44,7 @@ type Analysis = {
   id: string;
   modelSlug: string;
   modelName: string;
-  type: "image" | "audio" | "document" | "video";
+  type: "image" | "audio" | "document" | "video" | "text" | "structured";
   preview: string;
   score: number;
   label: string;
@@ -70,6 +74,26 @@ const weaponBoxStyles: { border: string; label: string }[] = [
   { border: "border-emerald-500", label: "bg-emerald-500" },
 ];
 
+const propagationFeatureLabels: Record<string, string> = {
+  src_score: "Source",
+  deepfake_score: "Deepfake",
+  violence_score: "Violence",
+  manip_risk: "Manipulation",
+  social_risk: "Social",
+  law_score: "Legal",
+  digital_pen: "Digital",
+  is_sexual: "Sexuel",
+  is_minor: "Mineur",
+  is_public: "Public",
+  is_organized: "Organise",
+  hour_posted: "Heure",
+  day_of_week: "Jour",
+};
+
+const propagationDefaultFeatures = Object.fromEntries(
+  Object.keys(propagationFeatureLabels).map((key) => [key, 0]),
+) as Record<string, number>;
+
 function DashboardPage() {
   const { model } = Route.useSearch();
   const [selected] = useState(model ?? aiModels[0].slug);
@@ -80,6 +104,10 @@ function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [question, setQuestion] = useState("");
+  const [textInput, setTextInput] = useState("");
+  const [propagationFeatures, setPropagationFeatures] = useState<Record<string, number>>(
+    propagationDefaultFeatures,
+  );
   const [history, setHistory] = useState<Analysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [latest, setLatest] = useState<Analysis | null>(null);
@@ -111,19 +139,33 @@ function DashboardPage() {
     return () => URL.revokeObjectURL(url);
   }, [current.input, file]);
 
-  async function runAnalysis(type: "image" | "audio" | "document" | "video") {
-    if (!file) return;
+  async function runAnalysis(type: Analysis["type"]) {
+    if (requiresFile(current.input) && !file) return;
+    if (current.input === "text" && !textInput.trim()) return;
     setAnalyzing(true);
     setError(null);
     try {
-      const result = await runBackendAnalysis(current, file, question, audioOptions);
+      const result = await runBackendAnalysis(
+        current,
+        file,
+        question,
+        audioOptions,
+        textInput,
+        propagationFeatures,
+      );
       const summary = summarizeResult(result);
       const analysis: Analysis = {
         id: crypto.randomUUID(),
         modelSlug: current.slug,
         modelName: current.name,
         type,
-        preview: file.name,
+        preview:
+          file?.name ??
+          (current.input === "text"
+            ? "Texte"
+            : current.input === "structured"
+              ? "Signaux de propagation"
+              : ""),
         score: summary.score,
         label: summary.label,
         details: summary.details,
@@ -147,7 +189,11 @@ function DashboardPage() {
         ? "Importer un audio"
         : current.input === "video"
           ? "Importer une video"
-          : "Importer un document";
+          : current.input === "text"
+            ? "Coller un texte"
+            : current.input === "structured"
+              ? "Renseigner les signaux"
+              : "Importer un document";
 
   const inputDescription =
     current.input === "image"
@@ -156,7 +202,11 @@ function DashboardPage() {
         ? "Formats acceptes: MP3, WAV, M4A."
         : current.input === "video"
           ? "Formats acceptes: MP4, MOV, WEBM."
-          : "Formats acceptes: PDF, images, documents.";
+          : current.input === "text"
+            ? "Texte brut analyse directement par le modele."
+            : current.input === "structured"
+              ? "Valeurs numeriques envoyees au modele de propagation."
+              : "Formats acceptes: PDF, images, documents.";
 
   const InputIcon =
     current.input === "audio"
@@ -165,7 +215,16 @@ function DashboardPage() {
         ? Video
         : current.input === "document"
           ? FileText
-          : ImageIcon;
+          : current.input === "text"
+            ? Type
+            : current.input === "structured"
+              ? Activity
+              : ImageIcon;
+
+  const disableRun =
+    analyzing ||
+    (requiresFile(current.input) && !file) ||
+    (current.input === "text" && !textInput.trim());
 
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 text-base">
@@ -180,7 +239,7 @@ function DashboardPage() {
           <p className="mt-4 text-base font-medium text-primary">Outil</p>
           <h1 className="mt-2 text-3xl sm:text-4xl font-display">{current.name}</h1>
           <p className="mt-2 text-base text-muted-foreground">
-            Televersez le fichier requis pour lancer une analyse.
+            Preparez l'entree requise pour lancer une analyse.
           </p>
         </div>
       </header>
@@ -207,26 +266,69 @@ function DashboardPage() {
                   {inputTitle}
                 </p>
                 <p className="mt-1 text-base text-muted-foreground">{inputDescription}</p>
-                <label
-                  htmlFor="file-input"
-                  className="mt-3 grid place-items-center gap-2 h-32 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground motion-button"
-                >
-                  <Upload className="size-5" aria-hidden />
-                  <span className="max-w-full truncate px-3">
-                    {file?.name ?? "Glissez ou cliquez pour televerser"}
-                  </span>
-                </label>
-                <input
-                  id="file-input"
-                  type="file"
-                  accept={current.accept}
-                  className="sr-only"
-                  onChange={(event) => {
-                    setFile(event.target.files?.[0] ?? null);
-                    setLatest(null);
-                    setError(null);
-                  }}
-                />
+                {requiresFile(current.input) && (
+                  <>
+                    <label
+                      htmlFor="file-input"
+                      className="mt-3 grid place-items-center gap-2 h-32 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground motion-button"
+                    >
+                      <Upload className="size-5" aria-hidden />
+                      <span className="max-w-full truncate px-3">
+                        {file?.name ?? "Glissez ou cliquez pour televerser"}
+                      </span>
+                    </label>
+                    <input
+                      id="file-input"
+                      type="file"
+                      accept={current.accept}
+                      className="sr-only"
+                      onChange={(event) => {
+                        setFile(event.target.files?.[0] ?? null);
+                        setLatest(null);
+                        setError(null);
+                      }}
+                    />
+                  </>
+                )}
+                {current.input === "text" && (
+                  <textarea
+                    value={textInput}
+                    onChange={(event) => {
+                      setTextInput(event.target.value);
+                      setLatest(null);
+                      setError(null);
+                    }}
+                    rows={8}
+                    placeholder="Collez le texte a analyser..."
+                    className="mt-3 w-full resize-none rounded-xl border border-border bg-background px-3 py-3 text-base focus-visible:ring-2 focus-visible:ring-ring motion-focus"
+                  />
+                )}
+                {current.input === "structured" && (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {Object.keys(propagationFeatureLabels).map((key) => (
+                      <label key={key} className="block">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {propagationFeatureLabels[key]}
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={propagationFeatures[key] ?? 0}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            setPropagationFeatures((features) => ({
+                              ...features,
+                              [key]: Number.isFinite(value) ? value : 0,
+                            }));
+                            setLatest(null);
+                            setError(null);
+                          }}
+                          className="mt-1 h-11 w-full rounded-xl border border-border bg-background px-3 text-base focus-visible:ring-2 focus-visible:ring-ring motion-focus"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
                 {current.input === "document" && (
                   <div className="mt-3">
                     <label
@@ -292,7 +394,7 @@ function DashboardPage() {
                 )}
                 <button
                   onClick={() => runAnalysis(current.input)}
-                  disabled={analyzing || !file}
+                  disabled={disableRun}
                   className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-aura-gradient text-primary-foreground text-base font-semibold shadow-soft disabled:opacity-50 motion-button"
                 >
                   <Sparkles className="size-4" aria-hidden /> Lancer l'analyse
@@ -342,8 +444,11 @@ function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                {isWeaponResult(latest.raw) && imagePreviewUrl && (
-                  <WeaponDetectionPreview result={latest.raw} imageUrl={imagePreviewUrl} />
+                {isBoxDetectionResult(latest.raw) && imagePreviewUrl && (
+                  <BoxDetectionPreview result={latest.raw} imageUrl={imagePreviewUrl} />
+                )}
+                {isPropagationResult(latest.raw) && (
+                  <PropagationCurvePreview result={latest.raw} />
                 )}
                 {latest.details.length > 0 && (
                   <div className="rounded-2xl bg-muted/40 p-4 motion-in">
@@ -403,14 +508,23 @@ function DashboardPage() {
   );
 }
 
-function WeaponDetectionPreview({ result, imageUrl }: { result: WeaponResult; imageUrl: string }) {
+function BoxDetectionPreview({
+  result,
+  imageUrl,
+}: {
+  result: WeaponResult | FaceResult;
+  imageUrl: string;
+}) {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const hasImageSize = imageSize.width > 0 && imageSize.height > 0;
+  const isFace = result.model === "face_detection";
 
   return (
     <div className="rounded-2xl bg-muted/40 p-4 motion-in">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold">Image annotee</p>
+        <p className="text-sm font-semibold">
+          {isFace ? "Visages encadres" : "Image annotee"}
+        </p>
         <span className="text-sm text-muted-foreground">
           {result.detections.length} detection(s)
         </span>
@@ -477,7 +591,45 @@ function WeaponDetectionPreview({ result, imageUrl }: { result: WeaponResult; im
         </ul>
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
-          Aucune boite a afficher pour cette image.
+          {isFace
+            ? "Aucun visage a encadrer pour cette image."
+            : "Aucune boite a afficher pour cette image."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PropagationCurvePreview({ result }: { result: PropagationResult }) {
+  const curve = result.transformer.propagation_curve;
+  const max = Math.max(...curve, 0.001);
+
+  return (
+    <div className="rounded-2xl bg-muted/40 p-4 motion-in">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Courbe de propagation</p>
+        <span className="text-sm text-muted-foreground">
+          {result.transformer.status === "ready" ? `${curve.length} points` : "Indisponible"}
+        </span>
+      </div>
+      {curve.length > 0 ? (
+        <div className="mt-4 flex h-32 items-end gap-1 rounded-2xl border border-border bg-background p-3">
+          {curve.map((value, index) => (
+            <div
+              key={`${index}-${value}`}
+              className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
+            >
+              <div
+                className="w-full rounded-t-md bg-aura-gradient motion-in"
+                style={{ height: `${Math.max(6, (value / max) * 100)}%` }}
+                title={`T${index + 1}: ${toPercent(value)}%`}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Le modele XGBoost est pret. Le transformer sera actif quand TensorFlow/Keras est installe.
         </p>
       )}
     </div>
@@ -497,7 +649,48 @@ function summarizeResult(result: ModelAnalysisResult) {
     };
   }
 
+  if ("model" in result && result.model === "image_authenticity_detection") {
+    return {
+      label: result.ai_generated ? "Image IA ou fake" : "Image reelle",
+      score: toPercent(result.confidence),
+      details: [
+        `Score reel: ${toPercent(result.scores.REAL)}%`,
+        `Score IA/fake: ${toPercent(result.scores.AI_GENERATED_OR_FAKE)}%`,
+        `Image: ${result.original_size[0]}x${result.original_size[1]} vers ${result.input_size[0]}x${result.input_size[1]}`,
+      ],
+    };
+  }
+
+  if ("model" in result && result.model === "text_authenticity_detection") {
+    return {
+      label: result.ai_generated ? "Texte genere par IA" : "Texte humain",
+      score: toPercent(result.confidence),
+      details: [
+        `Score humain: ${toPercent(result.scores.HUMAN)}%`,
+        `Score IA: ${toPercent(result.scores.AI_GENERATED)}%`,
+        `Caracteres: ${result.input.characters}`,
+        `Longueur max: ${result.input.max_length} tokens`,
+      ],
+    };
+  }
+
+  if ("model" in result && result.model === "propagation_prediction") {
+    return {
+      label: `${result.virality_class} / score ${result.virality_score.toFixed(2)}`,
+      score: toPercent(result.virality_class_confidence),
+      details: [
+        `Confiance classe: ${toPercent(result.virality_class_confidence)}%`,
+        `Classes: ${Object.entries(result.class_scores)
+          .map(([label, value]) => `${label} ${toPercent(value)}%`)
+          .join(" | ")}`,
+        `Transformer: ${result.transformer.status}`,
+        `Features: ${result.input.feature_columns.length}`,
+      ],
+    };
+  }
+
   if ("detections" in result) {
+    const isFace = result.model === "face_detection";
     const top = result.detections.reduce(
       (best, item) => (item.confidence > best.confidence ? item : best),
       { label: "", confidence: 0, box_xyxy: [0, 0, 0, 0] as [number, number, number, number] },
@@ -506,7 +699,9 @@ function summarizeResult(result: ModelAnalysisResult) {
       label:
         result.detections.length > 0
           ? `${result.detections.length} detection(s)`
-          : "Aucune arme detectee",
+          : isFace
+            ? "Aucun visage detecte"
+            : "Aucune arme detectee",
       score: toPercent(top.confidence),
       details:
         result.detections.length > 0
@@ -574,8 +769,16 @@ function summarizeResult(result: ModelAnalysisResult) {
   };
 }
 
-function isWeaponResult(result: ModelAnalysisResult): result is WeaponResult {
+function isBoxDetectionResult(result: ModelAnalysisResult): result is WeaponResult | FaceResult {
   return "detections" in result;
+}
+
+function isPropagationResult(result: ModelAnalysisResult): result is PropagationResult {
+  return "model" in result && result.model === "propagation_prediction";
+}
+
+function requiresFile(input: Analysis["type"]) {
+  return input === "image" || input === "audio" || input === "document" || input === "video";
 }
 
 function toPercent(value: number) {
