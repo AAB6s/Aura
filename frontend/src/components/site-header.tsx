@@ -5,6 +5,7 @@ import { useState } from "react";
 const links = [
   { to: "/", label: "Accueil" },
   { to: "/models", label: "Nos outils" },
+  { to: "/live", label: "Surveillance directe", variant: "cta" },
   { to: "/resources", label: "Ressources" },
   { to: "/contact", label: "Contact" },
 ] as const;
@@ -26,6 +27,17 @@ export function SiteHeader() {
         <nav className="hidden md:flex items-center gap-1" aria-label="Navigation principale">
           {links.map((l) => {
             const active = path === l.to;
+            if (l.variant === "cta") {
+              return (
+                <Link
+                  key={l.to}
+                  to={l.to}
+                  className="ml-2 inline-flex items-center justify-center px-3 py-2 rounded-full text-sm font-semibold bg-aura-gradient text-primary-foreground shadow-soft hover:shadow-glow transition-shadow motion-button"
+                >
+                  {l.label}
+                </Link>
+              );
+            }
             return (
               <Link
                 key={l.to}
@@ -69,7 +81,9 @@ export function SiteHeader() {
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted motion-button"
+                className={`px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted motion-button ${
+                  l.variant === "cta" ? "bg-primary/10 text-primary" : ""
+                }`}
               >
                 {l.label}
               </Link>

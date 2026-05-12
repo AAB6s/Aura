@@ -6,6 +6,7 @@ from .routers import (
     document,
     face,
     image_authenticity,
+    live,
     models,
     propagation,
     sexism,
@@ -40,3 +41,4 @@ app.include_router(image_authenticity.router)
 app.include_router(face.router)
 app.include_router(text_authenticity.router)
 app.include_router(propagation.router)
+app.include_router(live.router)
