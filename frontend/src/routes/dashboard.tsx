@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { aiModels } from "@/lib/ai-models";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Upload,
   FileText,
@@ -17,6 +17,7 @@ import {
   runBackendAnalysis,
   type AudioAnalysisOptions,
   type ModelAnalysisResult,
+  type WeaponResult,
 } from "@/lib/backend-api";
 
 const search = z.object({ model: z.string().optional() });
@@ -62,6 +63,13 @@ const audioOptionControls: { key: AudioBooleanOption; label: string }[] = [
   { key: "xai", label: "References XAI" },
 ];
 
+const weaponBoxStyles: { border: string; label: string }[] = [
+  { border: "border-red-500", label: "bg-red-500" },
+  { border: "border-amber-500", label: "bg-amber-500" },
+  { border: "border-sky-500", label: "bg-sky-500" },
+  { border: "border-emerald-500", label: "bg-emerald-500" },
+];
+
 function DashboardPage() {
   const { model } = Route.useSearch();
   const [selected] = useState(model ?? aiModels[0].slug);
@@ -70,6 +78,7 @@ function DashboardPage() {
     [selected],
   );
   const [file, setFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [question, setQuestion] = useState("");
   const [history, setHistory] = useState<Analysis[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
@@ -90,6 +99,17 @@ function DashboardPage() {
   function setAudioBooleanOption(key: AudioBooleanOption, value: boolean) {
     setAudioOptions((options) => ({ ...options, [key]: value }));
   }
+
+  useEffect(() => {
+    if (!file || current.input !== "image") {
+      setImagePreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [current.input, file]);
 
   async function runAnalysis(type: "image" | "audio" | "document" | "video") {
     if (!file) return;
@@ -153,7 +173,7 @@ function DashboardPage() {
         <div>
           <Link
             to="/models"
-            className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline motion-link"
           >
             <ArrowLeft className="size-4" aria-hidden /> Retour aux outils
           </Link>
@@ -167,9 +187,11 @@ function DashboardPage() {
 
       <div className="mt-8 grid lg:grid-cols-3 gap-7 max-w-6xl mx-auto">
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-3xl border border-border bg-card p-6">
+          <div className="rounded-3xl border border-border bg-card p-6 motion-card">
             <div className="flex items-center gap-3">
-              <span className={`grid place-items-center size-10 rounded-xl ${current.accent}`}>
+              <span
+                className={`grid place-items-center size-10 rounded-xl motion-icon ${current.accent}`}
+              >
                 <current.icon className="size-5" aria-hidden />
               </span>
               <div>
@@ -179,7 +201,7 @@ function DashboardPage() {
             </div>
 
             <div className="mt-6 grid sm:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-dashed border-border p-4">
+              <div className="rounded-2xl border border-dashed border-border p-4 motion-card">
                 <p className="flex items-center gap-2 text-base font-semibold">
                   <InputIcon className="size-4 text-primary" aria-hidden />
                   {inputTitle}
@@ -187,7 +209,7 @@ function DashboardPage() {
                 <p className="mt-1 text-base text-muted-foreground">{inputDescription}</p>
                 <label
                   htmlFor="file-input"
-                  className="mt-3 grid place-items-center gap-2 h-32 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground"
+                  className="mt-3 grid place-items-center gap-2 h-32 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground motion-button"
                 >
                   <Upload className="size-5" aria-hidden />
                   <span className="max-w-full truncate px-3">
@@ -219,7 +241,7 @@ function DashboardPage() {
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                       placeholder="Posez une question sur le document..."
-                      className="mt-2 w-full h-11 rounded-xl border border-border bg-background px-3 text-base focus-visible:ring-2 focus-visible:ring-ring"
+                      className="mt-2 w-full h-11 rounded-xl border border-border bg-background px-3 text-base focus-visible:ring-2 focus-visible:ring-ring motion-focus"
                     />
                   </div>
                 )}
@@ -230,7 +252,7 @@ function DashboardPage() {
                       {audioOptionControls.map((option) => (
                         <label
                           key={option.key}
-                          className="flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm"
+                          className="flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm motion-button"
                         >
                           <input
                             type="checkbox"
@@ -260,7 +282,7 @@ function DashboardPage() {
                           whisperModel: event.target.value as AudioAnalysisOptions["whisperModel"],
                         }))
                       }
-                      className="w-full h-11 rounded-xl border border-border bg-background px-3 text-base disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring"
+                      className="w-full h-11 rounded-xl border border-border bg-background px-3 text-base disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-ring motion-focus"
                     >
                       <option value="tiny">tiny</option>
                       <option value="base">base</option>
@@ -271,7 +293,7 @@ function DashboardPage() {
                 <button
                   onClick={() => runAnalysis(current.input)}
                   disabled={analyzing || !file}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-aura-gradient text-primary-foreground text-base font-semibold shadow-soft disabled:opacity-50"
+                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-aura-gradient text-primary-foreground text-base font-semibold shadow-soft disabled:opacity-50 motion-button"
                 >
                   <Sparkles className="size-4" aria-hidden /> Lancer l'analyse
                 </button>
@@ -279,7 +301,7 @@ function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-border bg-card p-6">
+          <div className="rounded-3xl border border-border bg-card p-6 motion-card">
             <h2 className="font-semibold text-lg">Resultat</h2>
             {!latest && !analyzing && !error && (
               <p className="mt-2 text-base text-muted-foreground">
@@ -300,7 +322,7 @@ function DashboardPage() {
             {latest && !analyzing && (
               <div className="mt-4 space-y-4">
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="rounded-2xl bg-muted/40 p-4">
+                  <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm text-muted-foreground">Prediction</p>
                     <p className="mt-1 text-lg font-semibold flex items-center gap-2">
                       <CheckCircle2 className="size-5 text-primary" aria-hidden /> {latest.label}
@@ -309,7 +331,7 @@ function DashboardPage() {
                       Modele : {latest.modelName}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-muted/40 p-4">
+                  <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm text-muted-foreground">Score de confiance</p>
                     <p className="mt-1 text-3xl font-display">{latest.score}%</p>
                     <div className="mt-3 h-2 rounded-full bg-border overflow-hidden">
@@ -320,8 +342,11 @@ function DashboardPage() {
                     </div>
                   </div>
                 </div>
+                {isWeaponResult(latest.raw) && imagePreviewUrl && (
+                  <WeaponDetectionPreview result={latest.raw} imageUrl={imagePreviewUrl} />
+                )}
                 {latest.details.length > 0 && (
-                  <div className="rounded-2xl bg-muted/40 p-4">
+                  <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm font-semibold">Details</p>
                     <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                       {latest.details.map((detail) => (
@@ -331,7 +356,7 @@ function DashboardPage() {
                   </div>
                 )}
                 {latest.answer && (
-                  <div className="rounded-2xl bg-muted/40 p-4">
+                  <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm font-semibold">Reponse</p>
                     <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
                       {latest.answer}
@@ -343,7 +368,7 @@ function DashboardPage() {
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-border bg-card p-6 h-fit">
+        <aside className="rounded-3xl border border-border bg-card p-6 h-fit motion-card">
           <h2 className="font-semibold flex items-center gap-2 text-lg">
             <History className="size-4 text-primary" aria-hidden /> Historique
           </h2>
@@ -352,7 +377,7 @@ function DashboardPage() {
           ) : (
             <ul className="mt-4 space-y-3">
               {history.map((item) => (
-                <li key={item.id} className="rounded-2xl border border-border p-3">
+                <li key={item.id} className="rounded-2xl border border-border p-3 motion-card">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-primary">{item.modelName}</span>
                     <span className="text-sm text-muted-foreground">{item.score}%</span>
@@ -375,6 +400,87 @@ function DashboardPage() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function WeaponDetectionPreview({ result, imageUrl }: { result: WeaponResult; imageUrl: string }) {
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const hasImageSize = imageSize.width > 0 && imageSize.height > 0;
+
+  return (
+    <div className="rounded-2xl bg-muted/40 p-4 motion-in">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Image annotee</p>
+        <span className="text-sm text-muted-foreground">
+          {result.detections.length} detection(s)
+        </span>
+      </div>
+      <div className="relative mt-3 overflow-hidden rounded-2xl border border-border bg-background">
+        <img
+          src={imageUrl}
+          alt="Image analysee avec detections"
+          className="block h-auto w-full"
+          onLoad={(event) => {
+            setImageSize({
+              width: event.currentTarget.naturalWidth,
+              height: event.currentTarget.naturalHeight,
+            });
+          }}
+        />
+        {hasImageSize &&
+          result.detections.map((detection, index) => {
+            const [x1, y1, x2, y2] = detection.box_xyxy;
+            const left = clampPercent((x1 / imageSize.width) * 100);
+            const top = clampPercent((y1 / imageSize.height) * 100);
+            const right = clampPercent((x2 / imageSize.width) * 100);
+            const bottom = clampPercent((y2 / imageSize.height) * 100);
+            const width = Math.max(0, right - left);
+            const height = Math.max(0, bottom - top);
+            const style = weaponBoxStyles[index % weaponBoxStyles.length];
+
+            return (
+              <div
+                key={`${detection.label}-${index}-${detection.box_xyxy.join("-")}`}
+                className={`absolute border-2 transition-all duration-300 ${style.border}`}
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  width: `${width}%`,
+                  height: `${height}%`,
+                }}
+              >
+                <span
+                  className={`absolute left-0 top-0 max-w-full truncate px-2 py-1 text-xs font-semibold text-white ${style.label}`}
+                >
+                  {detection.label} {toPercent(detection.confidence)}%
+                </span>
+              </div>
+            );
+          })}
+      </div>
+      {result.detections.length > 0 ? (
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {result.detections.map((detection, index) => (
+            <li
+              key={`${detection.label}-${index}`}
+              className="rounded-xl border border-border bg-background p-3 text-sm motion-card"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium">{detection.label}</span>
+                <span className="text-primary">{toPercent(detection.confidence)}%</span>
+              </div>
+              <p className="mt-1 text-muted-foreground">
+                Boite: {detection.box_xyxy.map((value) => Math.round(value)).join(", ")}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Aucune boite a afficher pour cette image.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -468,6 +574,14 @@ function summarizeResult(result: ModelAnalysisResult) {
   };
 }
 
+function isWeaponResult(result: ModelAnalysisResult): result is WeaponResult {
+  return "detections" in result;
+}
+
 function toPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value * 100)));
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
 }

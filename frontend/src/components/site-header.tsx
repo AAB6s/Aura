@@ -17,7 +17,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 backdrop-blur-md bg-background/75 border-b border-border/60">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 group" aria-label="AURA — Accueil">
-          <span className="grid place-items-center size-9 rounded-xl bg-aura-gradient shadow-soft">
+          <span className="grid place-items-center size-9 rounded-xl bg-aura-gradient shadow-soft motion-icon">
             <Shield className="size-5 text-primary-foreground" aria-hidden />
           </span>
           <span className="font-display text-xl tracking-tight">AURA</span>
@@ -30,8 +30,10 @@ export function SiteHeader() {
               <Link
                 key={l.to}
                 to={l.to}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors motion-button ${
+                  active
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
               >
                 {l.label}
@@ -43,14 +45,14 @@ export function SiteHeader() {
         <div className="hidden md:flex items-center gap-2">
           <Link
             to="/contact"
-            className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold bg-aura-gradient text-primary-foreground shadow-soft hover:shadow-glow transition-shadow"
+            className="inline-flex items-center justify-center px-4 py-2 rounded-full text-sm font-semibold bg-aura-gradient text-primary-foreground shadow-soft hover:shadow-glow transition-shadow motion-button"
           >
             Obtenir de l'aide
           </Link>
         </div>
 
         <button
-          className="md:hidden p-2 rounded-lg hover:bg-muted"
+          className="md:hidden p-2 rounded-lg hover:bg-muted motion-button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-label="Menu"
@@ -60,14 +62,14 @@ export function SiteHeader() {
       </div>
 
       {open && (
-        <div className="md:hidden border-t border-border/60 bg-background">
+        <div className="md:hidden border-t border-border/60 bg-background motion-in">
           <nav className="px-4 py-3 flex flex-col gap-1" aria-label="Navigation mobile">
             {links.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
                 onClick={() => setOpen(false)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted"
+                className="px-3 py-2 rounded-lg text-sm font-medium text-foreground hover:bg-muted motion-button"
               >
                 {l.label}
               </Link>
@@ -75,7 +77,7 @@ export function SiteHeader() {
             <Link
               to="/contact"
               onClick={() => setOpen(false)}
-              className="mt-2 text-center px-4 py-2 rounded-full text-sm font-semibold bg-aura-gradient text-primary-foreground"
+              className="mt-2 text-center px-4 py-2 rounded-full text-sm font-semibold bg-aura-gradient text-primary-foreground motion-button"
             >
               Obtenir de l'aide
             </Link>

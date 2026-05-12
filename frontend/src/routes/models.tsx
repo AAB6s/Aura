@@ -6,7 +6,11 @@ export const Route = createFileRoute("/models")({
   head: () => ({
     meta: [
       { title: "Nos outils — AURA" },
-      { name: "description", content: "Découvrez les 5 outils d'AURA dédiés à la détection et à la prévention des violences faites aux femmes." },
+      {
+        name: "description",
+        content:
+          "Découvrez les 5 outils d'AURA dédiés à la détection et à la prévention des violences faites aux femmes.",
+      },
     ],
   }),
   component: ModelsPage,
@@ -27,8 +31,11 @@ function ModelsPage() {
 
       <div className="mt-12 grid sm:grid-cols-2 xl:grid-cols-2 gap-7 max-w-5xl mx-auto">
         {aiModels.map((m) => (
-          <article key={m.slug} className="rounded-3xl border border-border bg-card p-8 sm:p-9 hover:shadow-soft hover:-translate-y-0.5 transition-all">
-            <span className={`grid place-items-center size-12 rounded-2xl ${m.accent}`}>
+          <article
+            key={m.slug}
+            className="group rounded-3xl border border-border bg-card p-8 sm:p-9 hover:shadow-soft hover:-translate-y-0.5 transition-all motion-card"
+          >
+            <span className={`grid place-items-center size-12 rounded-2xl motion-icon ${m.accent}`}>
               <m.icon className="size-6" aria-hidden />
             </span>
             <h2 className="mt-5 text-xl font-semibold leading-snug">{m.name}</h2>
@@ -36,7 +43,7 @@ function ModelsPage() {
             <Link
               to="/dashboard"
               search={{ model: m.slug }}
-              className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-primary hover:gap-2 transition-all"
+              className="mt-6 inline-flex items-center gap-1.5 text-base font-semibold text-primary hover:gap-2 transition-all motion-link"
             >
               Utiliser <ArrowRight className="size-4" aria-hidden />
             </Link>

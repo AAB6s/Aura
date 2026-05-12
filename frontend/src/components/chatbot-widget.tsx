@@ -7,7 +7,7 @@ export function ChatbotWidget() {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {open ? (
-        <div className="w-[360px] sm:w-[420px] lg:w-[460px] h-[520px] sm:h-[560px] rounded-3xl border border-border bg-card shadow-glow overflow-hidden flex flex-col">
+        <div className="w-[360px] sm:w-[420px] lg:w-[460px] h-[520px] sm:h-[560px] rounded-3xl border border-border bg-card shadow-glow overflow-hidden flex flex-col motion-in">
           <div className="flex items-center justify-between gap-3 px-5 py-4 bg-aura-gradient text-primary-foreground">
             <div>
               <p className="text-sm font-semibold">AURA · Assistante</p>
@@ -15,7 +15,7 @@ export function ChatbotWidget() {
             </div>
             <button
               type="button"
-              className="grid place-items-center size-9 rounded-full bg-white text-foreground shadow-soft hover:bg-white/90 transition-colors"
+              className="grid place-items-center size-9 rounded-full bg-white text-foreground shadow-soft hover:bg-white/90 transition-colors motion-button"
               onClick={() => setOpen(false)}
               aria-label="Fermer le chat"
             >
@@ -24,10 +24,10 @@ export function ChatbotWidget() {
           </div>
 
           <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
-            <div className="max-w-[85%] rounded-2xl bg-muted px-3 py-2 text-sm text-foreground">
+            <div className="max-w-[85%] rounded-2xl bg-muted px-3 py-2 text-sm text-foreground motion-in">
               Bonjour, je suis AURA. Comment puis-je vous aider aujourd'hui ?
             </div>
-            <div className="max-w-[85%] rounded-2xl bg-primary/10 px-3 py-2 text-sm text-foreground">
+            <div className="max-w-[85%] rounded-2xl bg-primary/10 px-3 py-2 text-sm text-foreground motion-in">
               Vous pouvez m'expliquer votre situation, je suis là pour vous accompagner.
             </div>
           </div>
@@ -36,13 +36,13 @@ export function ChatbotWidget() {
             <form className="flex items-center gap-2">
               <input
                 type="text"
-                className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-focus"
                 placeholder="Écrivez votre message..."
                 aria-label="Message"
               />
               <button
                 type="button"
-                className="grid place-items-center size-11 rounded-full bg-aura-gradient text-primary-foreground shadow-soft hover:shadow-glow transition-shadow"
+                className="grid place-items-center size-11 rounded-full bg-aura-gradient text-primary-foreground shadow-soft hover:shadow-glow transition-shadow motion-button"
                 aria-label="Envoyer"
               >
                 <SendHorizonal className="size-4" aria-hidden />
@@ -53,7 +53,7 @@ export function ChatbotWidget() {
       ) : (
         <button
           type="button"
-          className="grid place-items-center size-14 rounded-full bg-aura-gradient text-primary-foreground shadow-glow hover:shadow-soft transition-shadow"
+          className="grid place-items-center size-14 rounded-full bg-aura-gradient text-primary-foreground shadow-glow hover:shadow-soft transition-shadow motion-button motion-pulse"
           onClick={() => setOpen(true)}
           aria-label="Ouvrir le chat"
         >
