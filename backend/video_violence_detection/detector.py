@@ -140,7 +140,12 @@ class VideoSwinViolenceDetector:
         std = self.torch.tensor([0.225, 0.225, 0.225]).view(3, 1, 1, 1)
         return ((tensor - mean) / std).unsqueeze(0).to(self.device)
 
-    def detect(self, media_path: Path, threshold: float = 0.6, num_frames: int = DEFAULT_NUM_FRAMES):
+    def detect(
+        self,
+        media_path: Path,
+        threshold: float = 0.6,
+        num_frames: int = DEFAULT_NUM_FRAMES,
+    ):
         num_frames = max(4, min(int(num_frames or DEFAULT_NUM_FRAMES), 64))
         threshold = min(max(float(threshold), 0.0), 1.0)
         frames, metadata = self._read_frames(media_path, num_frames)

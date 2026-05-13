@@ -1,19 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from .services.paths import BACKEND_DIR
 from .routers import (
-    audio,
     document,
-    face,
     heartbeat,
     image_authenticity,
+    media_safety,
     models,
     propagation,
     sexism,
     text_authenticity,
-    threat,
-    video_violence,
-    weapon,
 )
 
 
@@ -34,13 +32,12 @@ app.add_middleware(
 
 app.include_router(models.router)
 app.include_router(document.router)
-app.include_router(audio.router)
+app.include_router(media_safety.router)
 app.include_router(sexism.router)
-app.include_router(threat.router)
-app.include_router(weapon.router)
 app.include_router(image_authenticity.router)
-app.include_router(face.router)
 app.include_router(text_authenticity.router)
 app.include_router(propagation.router)
 app.include_router(heartbeat.router)
-app.include_router(video_violence.router)
+ARTIFACTS_DIR = BACKEND_DIR / "artifacts"
+ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/artifacts", StaticFiles(directory=ARTIFACTS_DIR), name="artifacts")

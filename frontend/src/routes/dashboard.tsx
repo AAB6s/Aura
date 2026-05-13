@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { aiModels } from "@/lib/ai-models";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   Upload,
@@ -13,15 +14,25 @@ import {
   Video,
   Type,
   Activity,
+  ShieldCheck,
+  Crosshair,
+  Eye,
+  Volume2,
+  AlertTriangle,
 } from "lucide-react";
 import { z } from "zod";
 import {
+  backendUrl,
   runBackendAnalysis,
   type AudioAnalysisOptions,
   type FaceResult,
   type HeartbeatResult,
+  type MediaSafetyCheck,
+  type MediaSafetyOptions,
+  type MediaSafetyResult,
   type ModelAnalysisResult,
   type PropagationResult,
+  type VideoObjectDetectionResult,
   type WeaponResult,
 } from "@/lib/backend-api";
 
@@ -45,7 +56,7 @@ type Analysis = {
   id: string;
   modelSlug: string;
   modelName: string;
-  type: "image" | "audio" | "document" | "video" | "text" | "structured";
+  type: "image" | "audio" | "document" | "video" | "text" | "structured" | "media";
   preview: string;
   score: number;
   label: string;
@@ -68,12 +79,66 @@ const audioOptionControls: { key: AudioBooleanOption; label: string }[] = [
   { key: "xai", label: "References XAI" },
 ];
 
-const weaponBoxStyles: { border: string; label: string }[] = [
-  { border: "border-red-500", label: "bg-red-500" },
-  { border: "border-amber-500", label: "bg-amber-500" },
-  { border: "border-sky-500", label: "bg-sky-500" },
-  { border: "border-emerald-500", label: "bg-emerald-500" },
+const mediaSafetyChecks: {
+  key: MediaSafetyCheck;
+  label: string;
+  description: string;
+  color: string;
+  icon: typeof ShieldCheck;
+}[] = [
+  {
+    key: "violence",
+    label: "Violence",
+    description: "Image et video",
+    color: "border-fuchsia-500 bg-fuchsia-500/10 text-fuchsia-700",
+    icon: ShieldCheck,
+  },
+  {
+    key: "threat",
+    label: "Menace",
+    description: "Image et video",
+    color: "border-amber-500 bg-amber-500/10 text-amber-700",
+    icon: AlertTriangle,
+  },
+  {
+    key: "weapons",
+    label: "Armes",
+    description: "Boites sur image/video",
+    color: "border-red-500 bg-red-500/10 text-red-700",
+    icon: Crosshair,
+  },
+  {
+    key: "faces",
+    label: "Visages",
+    description: "Boites sur image/video",
+    color: "border-sky-500 bg-sky-500/10 text-sky-700",
+    icon: Eye,
+  },
+  {
+    key: "audio",
+    label: "Signaux audio",
+    description: "Audio seul ou video avec son",
+    color: "border-emerald-500 bg-emerald-500/10 text-emerald-700",
+    icon: Volume2,
+  },
 ];
+
+const mediaSafetyColors: Record<MediaSafetyCheck, string> = {
+  violence: "bg-fuchsia-500",
+  threat: "bg-amber-500",
+  weapons: "bg-red-500",
+  faces: "bg-sky-500",
+  audio: "bg-emerald-500",
+};
+
+const defaultMediaSafetyOptions: MediaSafetyOptions = {
+  violence: true,
+  threat: true,
+  weapons: true,
+  faces: true,
+  audio: true,
+};
+const audioDisplayThreshold = 0.6;
 
 const propagationFeatureLabels: Record<string, string> = {
   src_score: "Source",
@@ -129,6 +194,8 @@ function DashboardPage() {
   );
   const [file, setFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState("");
   const [question, setQuestion] = useState("");
   const [textInput, setTextInput] = useState("");
   const [propagationFeatures, setPropagationFeatures] = useState<Record<string, number>>(
@@ -153,19 +220,43 @@ function DashboardPage() {
     integrity: true,
     xai: true,
   });
+  const [mediaSafetyOptions, setMediaSafetyOptions] =
+    useState<MediaSafetyOptions>(defaultMediaSafetyOptions);
 
   function setAudioBooleanOption(key: AudioBooleanOption, value: boolean) {
     setAudioOptions((options) => ({ ...options, [key]: value }));
   }
 
   useEffect(() => {
-    if (!file || current.input !== "image") {
+    if (!file || (current.input !== "image" && !(current.input === "media" && fileKind(file) === "image"))) {
       setImagePreviewUrl("");
       return;
     }
 
     const url = URL.createObjectURL(file);
     setImagePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [current.input, file]);
+
+  useEffect(() => {
+    if (!file || (current.input !== "video" && !(current.input === "media" && fileKind(file) === "video"))) {
+      setVideoPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setVideoPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [current.input, file]);
+
+  useEffect(() => {
+    if (!file || (current.input !== "audio" && !(current.input === "media" && fileKind(file) === "audio"))) {
+      setAudioPreviewUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setAudioPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [current.input, file]);
 
@@ -184,6 +275,7 @@ function DashboardPage() {
         propagationFeatures,
         heartbeatFeatures,
         heartbeatSignal,
+        mediaSafetyOptions,
       );
       const summary = summarizeResult(result);
       const analysis: Analysis = {
@@ -217,7 +309,9 @@ function DashboardPage() {
   }
 
   const inputTitle =
-    current.input === "image"
+    current.input === "media"
+      ? "Importer un media"
+      : current.input === "image"
       ? "Importer une image"
       : current.input === "audio"
         ? "Importer un audio"
@@ -232,7 +326,9 @@ function DashboardPage() {
               : "Importer un document";
 
   const inputDescription =
-    current.input === "image"
+    current.input === "media"
+      ? "Formats acceptes: images, videos et audios."
+      : current.input === "image"
       ? "Formats acceptes: JPG, PNG, WEBP."
       : current.input === "audio"
         ? "Formats acceptes: MP3, WAV, M4A."
@@ -247,7 +343,9 @@ function DashboardPage() {
               : "Formats acceptes: PDF, images, documents.";
 
   const InputIcon =
-    current.input === "audio"
+    current.input === "media"
+      ? ShieldCheck
+      : current.input === "audio"
       ? Headphones
       : current.input === "video"
         ? Video
@@ -262,7 +360,11 @@ function DashboardPage() {
   const disableRun =
     analyzing ||
     (requiresFile(current.input) && !file) ||
-    (current.input === "text" && !textInput.trim());
+    (current.input === "text" && !textInput.trim()) ||
+    (current.slug === "media_safety_scan" &&
+      !Object.entries(mediaSafetyAvailability(file)).some(
+        ([key, available]) => available && mediaSafetyOptions[key as MediaSafetyCheck],
+      ));
 
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 text-base">
@@ -297,8 +399,12 @@ function DashboardPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid sm:grid-cols-2 gap-4">
-              <div className="rounded-2xl border border-dashed border-border p-4 motion-card">
+            <div className={`mt-6 grid gap-4 ${current.slug === "media_safety_scan" ? "" : "sm:grid-cols-2"}`}>
+              <div
+                className={`rounded-2xl border border-dashed border-border p-4 motion-card ${
+                  current.slug === "media_safety_scan" ? "mx-auto w-full max-w-3xl" : ""
+                }`}
+              >
                 <p className="flex items-center gap-2 text-base font-semibold">
                   <InputIcon className="size-4 text-primary" aria-hidden />
                   {inputTitle}
@@ -308,7 +414,9 @@ function DashboardPage() {
                   <>
                     <label
                       htmlFor="file-input"
-                      className="mt-3 grid place-items-center gap-2 h-32 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground motion-button"
+                      className={`mt-3 grid place-items-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 cursor-pointer hover:bg-muted transition-colors text-lg text-muted-foreground motion-button ${
+                        current.slug === "media_safety_scan" ? "h-40" : "h-32"
+                      }`}
                     >
                       <Upload className="size-5" aria-hidden />
                       <span className="max-w-full truncate px-3">
@@ -321,11 +429,23 @@ function DashboardPage() {
                       accept={current.accept}
                       className="sr-only"
                       onChange={(event) => {
-                        setFile(event.target.files?.[0] ?? null);
+                        const nextFile = event.target.files?.[0] ?? null;
+                        setFile(nextFile);
+                        if (current.slug === "media_safety_scan") {
+                          setMediaSafetyOptions(defaultChecksForFile(nextFile));
+                        }
                         setLatest(null);
                         setError(null);
                       }}
                     />
+                    {current.slug === "media_safety_scan" && file && (
+                      <MediaFilePreview
+                        file={file}
+                        imageUrl={imagePreviewUrl}
+                        videoUrl={videoPreviewUrl}
+                        audioUrl={audioPreviewUrl}
+                      />
+                    )}
                   </>
                 )}
                 {current.input === "text" && (
@@ -445,7 +565,17 @@ function DashboardPage() {
                     />
                   </div>
                 )}
-                {current.input === "audio" && (
+                {current.slug === "media_safety_scan" && (
+                  <MediaSafetyControls
+                    file={file}
+                    options={mediaSafetyOptions}
+                    onChange={(key, value) =>
+                      setMediaSafetyOptions((items) => ({ ...items, [key]: value }))
+                    }
+                  />
+                )}
+                {(current.input === "audio" ||
+                  (current.slug === "media_safety_scan" && mediaSafetyOptions.audio)) && (
                   <div className="mt-4 space-y-3">
                     <p className="text-sm font-medium text-muted-foreground">Options audio</p>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -510,8 +640,10 @@ function DashboardPage() {
             )}
             {analyzing && (
               <div className="mt-4 flex items-center gap-3 text-base text-muted-foreground">
-                <span className="size-2 rounded-full bg-primary animate-pulse" /> Analyse en
-                cours...
+                <span className="size-2 rounded-full bg-primary animate-pulse" />
+                {current.slug === "media_safety_scan"
+                  ? "Analyse en cours... les videos et audios longs peuvent prendre un moment."
+                  : "Analyse en cours..."}
               </div>
             )}
             {error && !analyzing && (
@@ -542,14 +674,19 @@ function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                {isBoxDetectionResult(latest.raw) && imagePreviewUrl && (
-                  <BoxDetectionPreview result={latest.raw} imageUrl={imagePreviewUrl} />
+                {isMediaSafetyResult(latest.raw) && (
+                  <MediaSafetyPreview
+                    result={latest.raw}
+                    imageUrl={imagePreviewUrl}
+                    videoUrl={videoPreviewUrl}
+                    audioUrl={audioPreviewUrl}
+                  />
                 )}
                 {isPropagationResult(latest.raw) && (
                   <PropagationCurvePreview result={latest.raw} />
                 )}
                 {isHeartbeatResult(latest.raw) && <HeartbeatBreakdownPreview result={latest.raw} />}
-                {latest.details.length > 0 && (
+                {latest.details.length > 0 && !isMediaSafetyResult(latest.raw) && (
                   <div className="rounded-2xl bg-muted/40 p-4 motion-in">
                     <p className="text-sm font-semibold">Details</p>
                     <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
@@ -633,94 +770,94 @@ function NumberField({
   );
 }
 
-function BoxDetectionPreview({
-  result,
+function MediaFilePreview({
+  file,
   imageUrl,
+  videoUrl,
+  audioUrl,
 }: {
-  result: WeaponResult | FaceResult;
+  file: File;
   imageUrl: string;
+  videoUrl: string;
+  audioUrl: string;
 }) {
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const hasImageSize = imageSize.width > 0 && imageSize.height > 0;
-  const isFace = result.model === "face_detection";
+  const kind = fileKind(file);
 
   return (
-    <div className="rounded-2xl bg-muted/40 p-4 motion-in">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold">
-          {isFace ? "Visages encadres" : "Image annotee"}
-        </p>
-        <span className="text-sm text-muted-foreground">
-          {result.detections.length} detection(s)
-        </span>
-      </div>
-      <div className="relative mt-3 overflow-hidden rounded-2xl border border-border bg-background">
-        <img
-          src={imageUrl}
-          alt="Image analysee avec detections"
-          className="block h-auto w-full"
-          onLoad={(event) => {
-            setImageSize({
-              width: event.currentTarget.naturalWidth,
-              height: event.currentTarget.naturalHeight,
-            });
-          }}
-        />
-        {hasImageSize &&
-          result.detections.map((detection, index) => {
-            const [x1, y1, x2, y2] = detection.box_xyxy;
-            const left = clampPercent((x1 / imageSize.width) * 100);
-            const top = clampPercent((y1 / imageSize.height) * 100);
-            const right = clampPercent((x2 / imageSize.width) * 100);
-            const bottom = clampPercent((y2 / imageSize.height) * 100);
-            const width = Math.max(0, right - left);
-            const height = Math.max(0, bottom - top);
-            const style = weaponBoxStyles[index % weaponBoxStyles.length];
-
-            return (
-              <div
-                key={`${detection.label}-${index}-${detection.box_xyxy.join("-")}`}
-                className={`absolute border-2 transition-all duration-300 ${style.border}`}
-                style={{
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  width: `${width}%`,
-                  height: `${height}%`,
-                }}
-              >
-                <span
-                  className={`absolute left-0 top-0 max-w-full truncate px-2 py-1 text-xs font-semibold text-white ${style.label}`}
-                >
-                  {detection.label} {toPercent(detection.confidence)}%
-                </span>
-              </div>
-            );
-          })}
-      </div>
-      {result.detections.length > 0 ? (
-        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-          {result.detections.map((detection, index) => (
-            <li
-              key={`${detection.label}-${index}`}
-              className="rounded-xl border border-border bg-background p-3 text-sm motion-card"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium">{detection.label}</span>
-                <span className="text-primary">{toPercent(detection.confidence)}%</span>
-              </div>
-              <p className="mt-1 text-muted-foreground">
-                Boite: {detection.box_xyxy.map((value) => Math.round(value)).join(", ")}
-              </p>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
-          {isFace
-            ? "Aucun visage a encadrer pour cette image."
-            : "Aucune boite a afficher pour cette image."}
-        </p>
+    <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-background">
+      {kind === "image" && imageUrl && (
+        <img src={imageUrl} alt="Media importe" className="max-h-72 w-full object-contain" />
       )}
+      {kind === "video" && videoUrl && (
+        <video src={videoUrl} controls className="aspect-video w-full bg-black" />
+      )}
+      {kind === "audio" && audioUrl && (
+        <div className="p-4">
+          <audio src={audioUrl} controls className="w-full" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MediaSafetyControls({
+  file,
+  options,
+  onChange,
+}: {
+  file: File | null;
+  options: MediaSafetyOptions;
+  onChange: (key: MediaSafetyCheck, value: boolean) => void;
+}) {
+  const availability = mediaSafetyAvailability(file);
+
+  return (
+    <div className="mt-5 rounded-2xl border border-border bg-background p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold">Controles a lancer</p>
+          <p className="text-xs text-muted-foreground">
+            Les options impossibles sont desactivees selon le type du fichier.
+          </p>
+        </div>
+        {file && (
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            {fileKind(file)}
+          </span>
+        )}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {mediaSafetyChecks.map((check) => {
+          const Icon = check.icon;
+          const disabled = !availability[check.key];
+
+          return (
+            <label
+              key={check.key}
+              className={`flex min-h-20 items-center gap-3 rounded-2xl border px-4 py-3 transition-all ${
+                disabled
+                  ? "border-border bg-muted/40 opacity-55"
+                  : options[check.key]
+                    ? check.color
+                    : "border-border bg-card hover:bg-muted/40"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={options[check.key] && !disabled}
+                disabled={disabled}
+                onChange={(event) => onChange(check.key, event.target.checked)}
+                className="size-4 accent-primary"
+              />
+              <Icon className="size-5 shrink-0" aria-hidden />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{check.label}</span>
+                <span className="block text-xs text-muted-foreground">{check.description}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -800,7 +937,288 @@ function HeartbeatBreakdownPreview({ result }: { result: HeartbeatResult }) {
   );
 }
 
+function MediaSafetyPreview({
+  result,
+  imageUrl,
+  videoUrl,
+  audioUrl,
+}: {
+  result: MediaSafetyResult;
+  imageUrl: string;
+  videoUrl: string;
+  audioUrl: string;
+}) {
+  const annotatedImage = result.previews.annotated_image_url
+    ? backendUrl(result.previews.annotated_image_url)
+    : "";
+  const annotatedVideo = result.previews.annotated_video_url
+    ? backendUrl(result.previews.annotated_video_url)
+    : "";
+  const cards = mediaSafetySummaryCards(result);
+
+  return (
+    <div className="space-y-6 motion-in">
+      <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold">Preview annotee</p>
+          <span className="text-sm text-muted-foreground">
+            {result.annotation.available
+              ? result.media_type === "video"
+                ? `${result.annotation.frame_count} frames`
+                : "Image annotee"
+              : "Aucune annotation"}
+          </span>
+        </div>
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          {result.media_type === "image" && imageUrl && (
+            <PreviewPane title="Original">
+              <img src={imageUrl} alt="Original" className="max-h-96 w-full object-contain" />
+            </PreviewPane>
+          )}
+          {result.media_type === "image" && annotatedImage && (
+            <PreviewPane title="Analyse">
+              <img src={annotatedImage} alt="Media annote" className="max-h-96 w-full object-contain" />
+            </PreviewPane>
+          )}
+          {result.media_type === "video" && videoUrl && (
+            <PreviewPane title="Original">
+              <video src={videoUrl} controls className="aspect-video w-full bg-black" />
+            </PreviewPane>
+          )}
+          {result.media_type === "video" && annotatedVideo && (
+            <PreviewPane title="Analyse frame par frame">
+              <video src={annotatedVideo} controls className="aspect-video w-full bg-black" />
+            </PreviewPane>
+          )}
+          {result.media_type === "audio" && audioUrl && (
+            <PreviewPane title="Audio">
+              <div className="p-4">
+                <audio src={audioUrl} controls className="w-full" />
+              </div>
+            </PreviewPane>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        {cards.map((card) => (
+          <div key={card.key} className="rounded-2xl border border-border bg-card p-4 shadow-sm motion-card">
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <span className={`size-2.5 rounded-full ${mediaSafetyColors[card.key]}`} />
+                {card.title}
+              </span>
+              <span className="text-sm font-semibold text-primary">{card.score}</span>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">{card.detail}</p>
+          </div>
+        ))}
+      </section>
+
+      <MediaSafetyObjectList result={result} />
+      <MediaSafetyAudioDetails result={result} />
+
+      {result.timeline.length > 0 && (
+        <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Timeline</p>
+            <span className="text-sm text-muted-foreground">{result.timeline.length} evenement(s)</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {result.timeline.slice(0, 16).map((item, index) => (
+              <div key={`${item.check}-${index}`} className="flex items-center gap-3 text-sm">
+                <span className={`size-2.5 rounded-full ${mediaSafetyColors[item.check]}`} />
+                <span className="w-24 text-muted-foreground">
+                  {formatTimelineRange(item.start, item.end)}
+                </span>
+                <span className="font-medium">{item.label}</span>
+                {typeof item.score === "number" && (
+                  <span className="ml-auto text-primary">{toPercent(item.score)}%</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {(result.skipped.length > 0 || result.errors.length > 0) && (
+        <section className="rounded-2xl border border-border bg-background p-4 text-sm shadow-sm">
+          <p className="font-semibold">Etat des controles</p>
+          <div className="mt-2 space-y-1 text-muted-foreground">
+            {result.skipped.map((item) => (
+              <p key={`skip-${item.check}`}>{item.label}: {item.reason}</p>
+            ))}
+            {result.errors.map((item) => (
+              <p key={`error-${item.check}`}>{item.check}: {item.message}</p>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PreviewPane({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
+      <p className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function MediaSafetyObjectList({ result }: { result: MediaSafetyResult }) {
+  const objectResults = [
+    { key: "weapons" as const, title: "Armes", result: result.results.weapons },
+    { key: "faces" as const, title: "Visages", result: result.results.faces },
+  ].filter((item) => item.result);
+
+  if (objectResults.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+      <p className="text-sm font-semibold">Boites detectees</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {objectResults.map((item) => (
+          <div key={item.key} className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <span className={`size-2.5 rounded-full ${mediaSafetyColors[item.key]}`} />
+                {item.title}
+              </span>
+              <span className="text-sm text-primary">{objectDetectionCount(item.result!)} detection(s)</span>
+            </div>
+            <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+              {objectDetectionRows(item.result!).slice(0, 12).map((row, index) => (
+                <p key={`${item.key}-${index}`} className="truncate">
+                  {row}
+                </p>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MediaSafetyAudioDetails({ result }: { result: MediaSafetyResult }) {
+  const audio = result.results.audio;
+  if (!audio) return null;
+  const transcripts = audio.timeline
+    .map((segment) => segment.transcript?.trim())
+    .filter((text): text is string => Boolean(text))
+    .slice(0, 4);
+  const emotions = audio.timeline
+    .flatMap((segment) => segment.hf_emotion?.predictions?.slice(0, 1) ?? [])
+    .slice(0, 4);
+  const deepfake = audio.timeline
+    .flatMap((segment) => segment.hf_deepfake?.predictions?.slice(0, 1) ?? [])
+    .slice(0, 4);
+
+  return (
+    <section className="rounded-2xl border border-border bg-background p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">Details audio</p>
+        <span className="text-sm text-muted-foreground">
+          {audio.summary.segments_processed} segment(s)
+        </span>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <AudioInfo label="Transcription" value={audio.summary.transcription_status} />
+        <AudioInfo label="Diarisation" value={audio.summary.diarization_status} />
+        <AudioInfo label="Emotion HF" value={audio.summary.hf_emotion_status} />
+        <AudioInfo label="Deepfake HF" value={audio.summary.hf_deepfake_status} />
+        <AudioInfo label="Integrite" value={audio.integrity.status} />
+        <AudioInfo label="XAI" value={`${audio.xai_reference_count} reference(s)`} />
+      </div>
+      {transcripts.length > 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-muted/20 p-3">
+          <p className="text-sm font-semibold">Transcription</p>
+          <div className="mt-2 space-y-2 text-sm text-muted-foreground">
+            {transcripts.map((text, index) => (
+              <p key={`${index}-${text}`}>{text}</p>
+            ))}
+          </div>
+        </div>
+      )}
+      {(emotions.length > 0 || deepfake.length > 0) && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {emotions.length > 0 && (
+            <AudioPredictionList title="Emotions" items={emotions} />
+          )}
+          {deepfake.length > 0 && (
+            <AudioPredictionList title="Deepfake" items={deepfake} />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AudioInfo({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 p-3 text-sm">
+      <p className="font-medium">{label}</p>
+      <p className="mt-1 text-muted-foreground">{value || "n/a"}</p>
+    </div>
+  );
+}
+
+function AudioPredictionList({
+  title,
+  items,
+}: {
+  title: string;
+  items: { label: string; score: number }[];
+}) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/20 p-3">
+      <p className="text-sm font-semibold">{title}</p>
+      <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+        {items.map((item, index) => (
+          <p key={`${title}-${index}-${item.label}`}>
+            {item.label}: {toPercent(item.score)}%
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function summarizeResult(result: ModelAnalysisResult) {
+  if (isMediaSafetyResult(result)) {
+    const scores = [
+      result.results.violence?.confidence,
+      result.results.threat?.confidence,
+      result.results.audio?.summary.top_event_probability,
+    ].filter((value): value is number => typeof value === "number");
+    const objectCount =
+      objectDetectionCount(result.results.weapons) + objectDetectionCount(result.results.faces);
+    const score = scores.length
+      ? toPercent(Math.max(...scores))
+      : objectCount > 0
+        ? 100
+        : 0;
+    return {
+      label:
+        result.completed_checks.length > 0
+          ? "Analyse terminee"
+          : "Aucun controle termine",
+      score,
+      details: [
+        `Type: ${result.media_type}`,
+        `Selection: ${result.selected_checks.join(", ")}`,
+        `Termines: ${result.completed_checks.join(", ") || "aucun"}`,
+        `Annotations: ${result.annotation.available ? "oui" : "non"}`,
+        `Ignores: ${result.skipped.length}`,
+        `Erreurs: ${result.errors.length}`,
+      ],
+    };
+  }
+
   if ("sexism_detected" in result) {
     return {
       label: result.sexism_detected ? "Sexisme detecte" : "Non sexiste",
@@ -866,66 +1284,6 @@ function summarizeResult(result: ModelAnalysisResult) {
     };
   }
 
-  if ("model" in result && result.model === "video_violence_detection") {
-    return {
-      label: result.violence_detected ? "Violence detectee" : "Aucune violence detectee",
-      score: toPercent(result.confidence),
-      details: [
-        `Score fight: ${toPercent(result.scores.fight ?? 0)}%`,
-        `Score noFight: ${toPercent(result.scores.noFight ?? 0)}%`,
-        `Images analysees: ${result.video.sampled_frames}`,
-        `Duree: ${result.video.duration_seconds ?? "n/a"}s`,
-      ],
-    };
-  }
-
-  if ("detections" in result) {
-    const isFace = result.model === "face_detection";
-    const top = result.detections.reduce(
-      (best, item) => (item.confidence > best.confidence ? item : best),
-      { label: "", confidence: 0, box_xyxy: [0, 0, 0, 0] as [number, number, number, number] },
-    );
-    return {
-      label:
-        result.detections.length > 0
-          ? `${result.detections.length} detection(s)`
-          : isFace
-            ? "Aucun visage detecte"
-            : "Aucune arme detectee",
-      score: toPercent(top.confidence),
-      details:
-        result.detections.length > 0
-          ? result.detections.map(
-              (item) =>
-                `${item.label}: ${toPercent(item.confidence)}% [${item.box_xyxy.join(", ")}]`,
-            )
-          : ["Aucune boite de detection retournee."],
-    };
-  }
-
-  if ("summary" in result) {
-    const transcripts = result.timeline
-      .map((segment) => segment.transcript?.trim())
-      .filter((text): text is string => Boolean(text))
-      .slice(0, 2);
-    return {
-      label: result.summary.top_event,
-      score: toPercent(result.summary.top_event_probability),
-      details: [
-        `Duree: ${result.duration_seconds}s`,
-        `Segments: ${result.summary.segments_processed}`,
-        `Transcription: ${result.summary.transcription_status}`,
-        `Diarisation: ${result.summary.diarization_status}`,
-        `Emotion HF: ${result.summary.hf_emotion_status}`,
-        `Deepfake HF: ${result.summary.hf_deepfake_status}`,
-        `References: ${result.summary.reference_matching_status}`,
-        `Integrite: ${result.integrity.status}`,
-        `XAI: ${result.xai_references.length}`,
-        ...transcripts.map((text) => `Texte: ${text}`),
-      ],
-    };
-  }
-
   if ("document" in result) {
     const confidences = result.document.elements.flatMap((element) =>
       Object.values(element.predictions).map((prediction) => prediction.confidence),
@@ -948,19 +1306,10 @@ function summarizeResult(result: ModelAnalysisResult) {
   }
 
   return {
-    label: result.threat_detected ? "Menace detectee" : "Aucune menace detectee",
-    score: toPercent(result.confidence),
-    details: [
-      `Score menace: ${toPercent(result.scores.threat)}%`,
-      `Score sans menace: ${toPercent(result.scores.no_threat)}%`,
-      `Images analysees: ${result.video.sampled_frames}`,
-      `Duree: ${result.video.duration_seconds ?? "n/a"}s`,
-    ],
+    label: "Analyse terminee",
+    score: 0,
+    details: [],
   };
-}
-
-function isBoxDetectionResult(result: ModelAnalysisResult): result is WeaponResult | FaceResult {
-  return "detections" in result;
 }
 
 function isPropagationResult(result: ModelAnalysisResult): result is PropagationResult {
@@ -971,14 +1320,133 @@ function isHeartbeatResult(result: ModelAnalysisResult): result is HeartbeatResu
   return "model" in result && result.model === "biometric_heartbeat_detection";
 }
 
+function isMediaSafetyResult(result: ModelAnalysisResult): result is MediaSafetyResult {
+  return "model" in result && result.model === "media_safety_scan";
+}
+
 function requiresFile(input: Analysis["type"]) {
-  return input === "image" || input === "audio" || input === "document" || input === "video";
+  return (
+    input === "image" ||
+    input === "audio" ||
+    input === "document" ||
+    input === "video" ||
+    input === "media"
+  );
 }
 
 function toPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value * 100)));
 }
 
-function clampPercent(value: number) {
-  return Math.max(0, Math.min(100, value));
+function fileKind(file: File | null): "image" | "video" | "audio" | "unknown" {
+  if (!file) return "unknown";
+  if (file.type.startsWith("image/")) return "image";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
+  const name = file.name.toLowerCase();
+  if (/\.(jpg|jpeg|png|webp|bmp)$/.test(name)) return "image";
+  if (/\.(mp4|mov|avi|mkv|webm|m4v)$/.test(name)) return "video";
+  if (/\.(wav|mp3|m4a|flac|ogg|aac)$/.test(name)) return "audio";
+  return "unknown";
+}
+
+function mediaSafetyAvailability(file: File | null): MediaSafetyOptions {
+  const kind = fileKind(file);
+  return {
+    violence: kind === "image" || kind === "video",
+    threat: kind === "image" || kind === "video",
+    weapons: kind === "image" || kind === "video",
+    faces: kind === "image" || kind === "video",
+    audio: kind === "audio" || kind === "video",
+  };
+}
+
+function defaultChecksForFile(file: File | null): MediaSafetyOptions {
+  return mediaSafetyAvailability(file);
+}
+
+function mediaSafetySummaryCards(result: MediaSafetyResult) {
+  const cards: { key: MediaSafetyCheck; title: string; score: string; detail: string }[] = [];
+  if (result.results.violence) {
+    cards.push({
+      key: "violence",
+      title: "Violence",
+      score: `${toPercent(result.results.violence.confidence)}%`,
+      detail: result.results.violence.violence_detected
+        ? "Violence detectee dans le media."
+        : "Aucune violence detectee par ce controle.",
+    });
+  }
+  if (result.results.threat) {
+    cards.push({
+      key: "threat",
+      title: "Menace",
+      score: `${toPercent(result.results.threat.confidence)}%`,
+      detail: result.results.threat.threat_detected
+        ? "Menace detectee dans le media."
+        : "Aucune menace detectee par ce controle.",
+    });
+  }
+  if (result.results.weapons) {
+    cards.push({
+      key: "weapons",
+      title: "Armes",
+      score: `${objectDetectionCount(result.results.weapons)}`,
+      detail: "Detection par boites sur image ou frames video.",
+    });
+  }
+  if (result.results.faces) {
+    cards.push({
+      key: "faces",
+      title: "Visages",
+      score: `${objectDetectionCount(result.results.faces)}`,
+      detail: "Visages encadres dans le media.",
+    });
+  }
+  if (result.results.audio) {
+    const audioScore = result.results.audio.summary.top_event_probability;
+    cards.push({
+      key: "audio",
+      title: "Audio",
+      score: audioScore >= audioDisplayThreshold ? `${toPercent(audioScore)}%` : "<60%",
+      detail:
+        audioScore >= audioDisplayThreshold
+          ? `${result.results.audio.summary.top_event} sur ${result.results.audio.summary.segments_processed} segment(s).`
+          : "Aucun signal audio fort au-dessus de 60%.",
+    });
+  }
+  return cards;
+}
+
+function objectDetectionCount(
+  result: WeaponResult | FaceResult | VideoObjectDetectionResult | undefined,
+) {
+  if (!result) return 0;
+  if ("total_detections" in result) return result.total_detections;
+  return result.detections.length;
+}
+
+function objectDetectionRows(result: WeaponResult | FaceResult | VideoObjectDetectionResult) {
+  if ("frame_detections" in result) {
+    return result.frame_detections.flatMap((frame) =>
+      frame.detections.map(
+        (detection) =>
+          `${formatTime(frame.time_seconds)} - ${detection.label} ${toPercent(detection.confidence)}% [${detection.box_xyxy.join(", ")}]`,
+      ),
+    );
+  }
+  return result.detections.map(
+    (detection) =>
+      `${detection.label} ${toPercent(detection.confidence)}% [${detection.box_xyxy.join(", ")}]`,
+  );
+}
+
+function formatTimelineRange(start: number | null | undefined, end: number | null | undefined) {
+  if (typeof end !== "number" || end === start) return formatTime(start);
+  return `${formatTime(start)} - ${formatTime(end)}`;
+}
+
+function formatTime(value: number | null | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  return `${value.toFixed(2)}s`;
 }

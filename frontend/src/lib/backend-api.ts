@@ -17,6 +17,10 @@ export type AudioAnalysisOptions = {
   xai: boolean;
 };
 
+export type MediaSafetyCheck = "violence" | "threat" | "weapons" | "faces" | "audio";
+
+export type MediaSafetyOptions = Record<MediaSafetyCheck, boolean>;
+
 export type SexismResult = {
   file: string;
   model: "sexism_detection";
@@ -325,24 +329,127 @@ export type VideoViolenceResult = {
     duration_seconds: number | null;
     sampled_frames: number;
   };
+  annotation?: {
+    available: boolean;
+    frame_count: number;
+    fps: number | null;
+  };
+  annotated_video_url?: string;
   input: {
     num_frames: number;
     input_size: [224, 224];
   };
 };
 
+export type VideoObjectDetectionResult = {
+  model: "weapon_detection" | "face_detection";
+  frame_count: number;
+  fps: number | null;
+  sampled_frames: number;
+  total_detections: number;
+  frame_detections: {
+    frame_index: number;
+    time_seconds: number | null;
+    detections: {
+      label: string;
+      confidence: number;
+      box_xyxy: [number, number, number, number];
+    }[];
+  }[];
+};
+
+export type MediaSafetyAudioResult = Pick<
+  AudioResult,
+  "file" | "file_hash" | "duration_seconds" | "sample_rate" | "summary" | "integrity" | "elapsed_seconds"
+> & {
+  model: {
+    name?: string;
+    classes?: string[];
+    temperature?: number;
+    tta_shifts?: number[];
+  };
+  timeline: {
+    index: number;
+    start: number;
+    end: number;
+    event_label: string;
+    event_confidence: number;
+    decision_status?: string;
+    secondary_events?: { label: string; probability: number }[];
+    probabilities?: { label: string; probability: number }[];
+    low_energy?: boolean;
+    acoustic_context?: string;
+    speaker?: string;
+    transcript?: string;
+    transcript_status?: string;
+    language?: string;
+    hf_emotion?: AudioResult["timeline"][number]["hf_emotion"];
+    hf_deepfake?: AudioResult["timeline"][number]["hf_deepfake"];
+    reference_speaker?: AudioResult["timeline"][number]["reference_speaker"];
+  }[];
+  timeline_truncated: boolean;
+  xai_reference_count: number;
+};
+
+export type MediaSafetyResult = {
+  file: string;
+  model: "media_safety_scan";
+  media_type: "image" | "video" | "audio" | "unknown";
+  selected_checks: MediaSafetyCheck[];
+  completed_checks: MediaSafetyCheck[];
+  results: {
+    violence?: VideoViolenceResult;
+    threat?: ThreatResult;
+    weapons?: WeaponResult | VideoObjectDetectionResult;
+    faces?: FaceResult | VideoObjectDetectionResult;
+    audio?: MediaSafetyAudioResult;
+  };
+  previews: {
+    annotated_image_url?: string;
+    annotated_video_url?: string;
+  };
+  timeline: {
+    check: MediaSafetyCheck;
+    start: number | null;
+    end: number | null;
+    label: string;
+    score?: number | null;
+    detections?: {
+      label: string;
+      confidence: number;
+      box_xyxy: [number, number, number, number];
+    }[];
+  }[];
+  skipped: {
+    check: MediaSafetyCheck;
+    label: string;
+    reason: string;
+  }[];
+  errors: {
+    check: MediaSafetyCheck;
+    message: string;
+  }[];
+  annotation: {
+    available: boolean;
+    frame_count: number;
+    fps: number | null;
+  };
+};
+
+export function backendUrl(path: string) {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export type ModelAnalysisResult =
   | SexismResult
-  | WeaponResult
-  | FaceResult
   | ImageAuthenticityResult
   | TextAuthenticityResult
   | PropagationResult
   | HeartbeatResult
-  | AudioResult
   | DocumentAnalyzeResult
-  | ThreatResult
-  | VideoViolenceResult;
+  | MediaSafetyResult;
 
 export async function runBackendAnalysis(
   model: AIModel,
@@ -353,6 +460,7 @@ export async function runBackendAnalysis(
   propagationFeatures?: Record<string, number>,
   heartbeatFeatures?: Record<string, number>,
   heartbeatSignal?: number[],
+  mediaSafetyOptions?: MediaSafetyOptions,
 ) {
   let endpoint = "";
 
@@ -392,29 +500,22 @@ export async function runBackendAnalysis(
 
   const form = new FormData();
 
-  if (model.slug === "sexism_detection") {
+  if (model.slug === "media_safety_scan") {
     if (!file) throw new Error("File is required.");
     form.append("file", file);
-    endpoint = "/sexism/detect";
-  } else if (model.slug === "weapon_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/weapon/detect";
-  } else if (model.slug === "image_authenticity_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/image-authenticity/detect";
-  } else if (model.slug === "face_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/face/detect";
-  } else if (model.slug === "text_authenticity_detection") {
-    endpoint = "/text-authenticity/detect";
-    form.append("text", text ?? "");
-  } else if (model.slug === "audio_violence_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/audio/analyze";
+    endpoint = "/media-safety/analyze";
+    const checks = mediaSafetyOptions ?? {
+      violence: true,
+      threat: true,
+      weapons: true,
+      faces: true,
+      audio: true,
+    };
+    form.append("violence", String(checks.violence));
+    form.append("threat", String(checks.threat));
+    form.append("weapons", String(checks.weapons));
+    form.append("faces", String(checks.faces));
+    form.append("audio", String(checks.audio));
     if (audioOptions) {
       form.append("transcription", String(audioOptions.transcription));
       form.append("whisper_model", audioOptions.whisperModel);
@@ -425,22 +526,23 @@ export async function runBackendAnalysis(
       form.append("acoustic_context", String(audioOptions.acousticContext));
       form.append("integrity", String(audioOptions.integrity));
       form.append("xai", String(audioOptions.xai));
-    } else {
-      form.append("transcription", "false");
     }
+  } else if (model.slug === "sexism_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
+    endpoint = "/sexism/detect";
+  } else if (model.slug === "image_authenticity_detection") {
+    if (!file) throw new Error("File is required.");
+    form.append("file", file);
+    endpoint = "/image-authenticity/detect";
+  } else if (model.slug === "text_authenticity_detection") {
+    endpoint = "/text-authenticity/detect";
+    form.append("text", text ?? "");
   } else if (model.slug === "document_intelligence_rag") {
     if (!file) throw new Error("File is required.");
     form.append("file", file);
     endpoint = "/document/analyze";
     form.append("question", question);
-  } else if (model.slug === "threat_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/threat/detect";
-  } else if (model.slug === "video_violence_detection") {
-    if (!file) throw new Error("File is required.");
-    form.append("file", file);
-    endpoint = "/video-violence/detect";
   } else {
     throw new Error(`Unsupported model: ${model.slug}`);
   }

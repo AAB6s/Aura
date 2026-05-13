@@ -111,6 +111,7 @@ mlartifacts/
 .dvc/
 *.dvc
 model_registry/
+backend/artifacts/
 backend/document_intelligence_rag/storage/vector_indexes/
 celerybeat-schedule
 celerybeat.pid
