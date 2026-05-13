@@ -8,6 +8,7 @@ pymupdf
 python-docx
 openpyxl
 opencv-python
+imageio-ffmpeg
 pytesseract
 torch
 torchvision
