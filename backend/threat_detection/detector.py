@@ -41,7 +41,14 @@ class ThreatDetector:
         if requested_device == "auto":
             requested_device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(requested_device)
-        state = torch.load(self.model_path, map_location="cpu", weights_only=True)
+        try:
+            state = torch.load(self.model_path, map_location="cpu", weights_only=True)
+        except RuntimeError as exc:
+            if "TorchScript" not in str(exc):
+                raise
+            state = torch.load(self.model_path, map_location="cpu", weights_only=False)
+        if hasattr(state, "state_dict"):
+            state = state.state_dict()
         state = OrderedDict((key.removeprefix("model."), value) for key, value in state.items())
         self.model = r2plus1d_18(weights=None)
         self.model.fc = nn.Linear(self.model.fc.in_features, 1)
@@ -134,4 +141,3 @@ class ThreatDetector:
                 "input_size": INPUT_SIZE,
             },
         }
-
