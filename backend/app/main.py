@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import (
     audio,
+    chat,
     document,
     face,
     image_authenticity,
@@ -32,6 +33,7 @@ app.add_middleware(
 )
 
 app.include_router(models.router)
+app.include_router(chat.router)
 app.include_router(document.router)
 app.include_router(audio.router)
 app.include_router(sexism.router)
