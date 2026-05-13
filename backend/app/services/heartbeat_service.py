@@ -14,3 +14,7 @@ def heartbeat_status():
 
 def predict_heartbeat(features: dict[str, float], signal: list[float] | None = None):
     return heartbeat_detector().predict(features, signal=signal)
+
+
+def predict_live_heartbeat(signal: list[float]):
+    return heartbeat_detector().predict_live(signal)

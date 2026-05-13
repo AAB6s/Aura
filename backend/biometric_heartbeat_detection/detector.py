@@ -172,3 +172,21 @@ class HeartbeatDetector:
                 "feature_columns": FEATURE_COLUMNS,
             },
         }
+
+    def predict_live(self, signal: list[float]):
+        if signal is None or len(signal) < 10:
+            raise ValueError("Signal too short")
+        with self.torch.inference_mode():
+            logits = self.sequence_model(self._sequence_tensor(signal))
+            probabilities = self.torch.softmax(logits, dim=1)[0].detach().cpu().tolist()
+        label_index = int(max(range(len(probabilities)), key=probabilities.__getitem__))
+        return {
+            "label": label_index,
+            "class": self.class_names.get(label_index, f"class_{label_index}"),
+            "confidence": round(float(probabilities[label_index]), 3),
+            "probs": {
+                self.class_names.get(index, f"class_{index}"): round(float(score), 3)
+                for index, score in enumerate(probabilities)
+            },
+            "input_length": self.sequence_length,
+        }
